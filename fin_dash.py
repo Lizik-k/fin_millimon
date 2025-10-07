@@ -1,116 +1,128 @@
-import sqlite3
+from sqlalchemy import create_engine, text
+import os
 import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
 
-with sqlite3.connect('millimon_finsnce.db') as db:
-    cur = db.cursor()
-    cur.execute("PRAGMA foreign_keys = ON")
-
-    # Таблица вида финансов
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS operation_types (
-        id_operation INTEGER PRIMARY KEY AUTOINCREMENT,
-        name_operation VARCHAR(10) NOT NULL UNIQUE CHECK (name_operation IN ('доход', 'расход')),
-        description TEXT
-    )
-    ''')
-
-    # 2. Таблица категорий (теперь ссылается на тип операции)
-    cur.execute('''
-    CREATE TABLE IF NOT EXISTS categories (
-        id_categories INTEGER PRIMARY KEY AUTOINCREMENT,
-        operation_type_id INTEGER NOT NULL,
-        name VARCHAR(100) NOT NULL UNIQUE,
-        description TEXT,
-        FOREIGN KEY (operation_type_id) REFERENCES operation_types(id_operation) ON DELETE CASCADE
-    )
-    ''')
-
-    # 3. Таблица подкатегорий
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS subcategories (
-            id_subcategories INTEGER PRIMARY KEY AUTOINCREMENT,
-            category_id INTEGER NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            description TEXT,
-            UNIQUE (category_id, name),
-            FOREIGN KEY (category_id) REFERENCES categories(id_categories) ON DELETE CASCADE
-        )
-        ''')
-
-    # 4. Таблица групп
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS groups (
-            id_groups INTEGER PRIMARY KEY AUTOINCREMENT,
-            subcategory_id INTEGER NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            description TEXT,
-            UNIQUE (subcategory_id, name),
-            FOREIGN KEY (subcategory_id) REFERENCES subcategories(id_subcategories) ON DELETE CASCADE
-        )
-        ''')
-
-    # 5. Таблица подгрупп
-    cur.execute('''
-        CREATE TABLE IF NOT EXISTS subgroups (
-            id_subgroups INTEGER PRIMARY KEY AUTOINCREMENT,
-            group_id INTEGER NOT NULL,
-            name VARCHAR(100) NOT NULL,
-            description TEXT,
-            UNIQUE (group_id, name),
-            FOREIGN KEY (group_id) REFERENCES groups(id_groups) ON DELETE CASCADE
-        )
-        ''')
-
-    # 6. Таблица финансовых операций
-    cur.execute('''
-       CREATE TABLE IF NOT EXISTS financial_operations (
-           id INTEGER PRIMARY KEY AUTOINCREMENT, 
-           operation_date DATE NOT NULL,
-           operation_type_id INTEGER NOT NULL,
-           amount DECIMAL(15, 2) NOT NULL CHECK (amount >= 0),
-           category_id INTEGER NOT NULL,
-           subcategory_id INTEGER,
-           group_id INTEGER,
-           subgroup_id INTEGER,
-           comment TEXT,
-           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-           FOREIGN KEY (operation_type_id) REFERENCES operation_types(id_operation),
-           FOREIGN KEY (category_id) REFERENCES categories(id_categories),
-           FOREIGN KEY (subcategory_id) REFERENCES subcategories(id_subcategories),
-           FOREIGN KEY (group_id) REFERENCES groups(id_groups),
-           FOREIGN KEY (subgroup_id) REFERENCES subgroups(id_subgroups)
-       )
-       ''')
-
-
-
-
-    # Триггер для обновления времени
-    cur.execute('''
-        CREATE TRIGGER IF NOT EXISTS update_operations_timestamp 
-        AFTER UPDATE ON financial_operations
-        FOR EACH ROW
-        BEGIN
-            UPDATE financial_operations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
-        END
-        ''')
+# with sqlite3.connect('millimon_finsnce.db') as db:
+#     cur = db.cursor()
+#     cur.execute("PRAGMA foreign_keys = ON")
+#
+#     # Таблица вида финансов
+#     cur.execute('''
+#     CREATE TABLE IF NOT EXISTS operation_types (
+#         id_operation INTEGER PRIMARY KEY AUTOINCREMENT,
+#         name_operation VARCHAR(10) NOT NULL UNIQUE CHECK (name_operation IN ('доход', 'расход')),
+#         description TEXT
+#     )
+#     ''')
+#
+#     # 2. Таблица категорий (теперь ссылается на тип операции)
+#     cur.execute('''
+#     CREATE TABLE IF NOT EXISTS categories (
+#         id_categories INTEGER PRIMARY KEY AUTOINCREMENT,
+#         operation_type_id INTEGER NOT NULL,
+#         name VARCHAR(100) NOT NULL UNIQUE,
+#         description TEXT,
+#         FOREIGN KEY (operation_type_id) REFERENCES operation_types(id_operation) ON DELETE CASCADE
+#     )
+#     ''')
+#
+#     # 3. Таблица подкатегорий
+#     cur.execute('''
+#         CREATE TABLE IF NOT EXISTS subcategories (
+#             id_subcategories INTEGER PRIMARY KEY AUTOINCREMENT,
+#             category_id INTEGER NOT NULL,
+#             name VARCHAR(100) NOT NULL,
+#             description TEXT,
+#             UNIQUE (category_id, name),
+#             FOREIGN KEY (category_id) REFERENCES categories(id_categories) ON DELETE CASCADE
+#         )
+#         ''')
+#
+#     # 4. Таблица групп
+#     cur.execute('''
+#         CREATE TABLE IF NOT EXISTS groups (
+#             id_groups INTEGER PRIMARY KEY AUTOINCREMENT,
+#             subcategory_id INTEGER NOT NULL,
+#             name VARCHAR(100) NOT NULL,
+#             description TEXT,
+#             UNIQUE (subcategory_id, name),
+#             FOREIGN KEY (subcategory_id) REFERENCES subcategories(id_subcategories) ON DELETE CASCADE
+#         )
+#         ''')
+#
+#     # 5. Таблица подгрупп
+#     cur.execute('''
+#         CREATE TABLE IF NOT EXISTS subgroups (
+#             id_subgroups INTEGER PRIMARY KEY AUTOINCREMENT,
+#             group_id INTEGER NOT NULL,
+#             name VARCHAR(100) NOT NULL,
+#             description TEXT,
+#             UNIQUE (group_id, name),
+#             FOREIGN KEY (group_id) REFERENCES groups(id_groups) ON DELETE CASCADE
+#         )
+#         ''')
+#
+#     # 6. Таблица финансовых операций
+#     cur.execute('''
+#        CREATE TABLE IF NOT EXISTS financial_operations (
+#            id INTEGER PRIMARY KEY AUTOINCREMENT,
+#            operation_date DATE NOT NULL,
+#            operation_type_id INTEGER NOT NULL,
+#            amount DECIMAL(15, 2) NOT NULL CHECK (amount >= 0),
+#            category_id INTEGER NOT NULL,
+#            subcategory_id INTEGER,
+#            group_id INTEGER,
+#            subgroup_id INTEGER,
+#            comment TEXT,
+#            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+#            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+#            FOREIGN KEY (operation_type_id) REFERENCES operation_types(id_operation),
+#            FOREIGN KEY (category_id) REFERENCES categories(id_categories),
+#            FOREIGN KEY (subcategory_id) REFERENCES subcategories(id_subcategories),
+#            FOREIGN KEY (group_id) REFERENCES groups(id_groups),
+#            FOREIGN KEY (subgroup_id) REFERENCES subgroups(id_subgroups)
+#        )
+#        ''')
+#
+#
+#
+#
+#     # Триггер для обновления времени
+#     cur.execute('''
+#         CREATE TRIGGER IF NOT EXISTS update_operations_timestamp
+#         AFTER UPDATE ON financial_operations
+#         FOR EACH ROW
+#         BEGIN
+#             UPDATE financial_operations SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+#         END
+#         ''')
 
 class FinanceApp:
 
-    def __init__(self, db_name='millimon_finsnce.db'):
-        self.db_name = db_name
+    def __init__(self, db_url=None):
+        if db_url is None:
+            # Streamlit Cloud: st.secrets
+            try:
+                db_url = st.secrets["DB_URL"]
+            except Exception:
+                db_url = os.getenv("DB_URL")
+        if not db_url:
+            raise RuntimeError("DB_URL не задан")
+            # Подключаемся с sslmode (Supabase)
+        self.engine = create_engine(db_url, connect_args={"sslmode": "require"})
 
 
     def get_connection(self):
-        """Устанавливает соединение с базой данных"""
-        conn = sqlite3.connect(self.db_name)
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        # """Устанавливает соединение с базой данных"""
+        # conn = sqlite3.connect(self.db_name)
+        # conn.execute("PRAGMA foreign_keys = ON")
+        # return conn
+        """Возвращает SQLAlchemy connection (использовать с pandas.read_sql и .execute)"""
+        return self.engine.connect()
 
 
     def get_operation_types(self):
@@ -143,24 +155,31 @@ class FinanceApp:
 
 
     def add_operation(self, operation_data):
-        """Добавляет новую финансовую операцию"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-
+        """Добавляет новую финансовую операцию (operation_data — tuple)"""
+        # operation_data: (operation_date, type_id, amount, category_id, subcat_id, group_id, subgroup_id, comment, lesson_type_id?)
+        insert_sql = text('''
+            INSERT INTO financial_operations
+            (operation_date, operation_type_id, amount, category_id, subcategory_id, group_id, subgroup_id, comment, lesson_type_id)
+            VALUES (:operation_date, :operation_type_id, :amount, :category_id, :subcategory_id, :group_id, :subgroup_id, :comment, :lesson_type_id)
+        ''')
+        params = {
+            "operation_date": operation_data[0],
+            "operation_type_id": operation_data[1],
+            "amount": operation_data[2],
+            "category_id": operation_data[3],
+            "subcategory_id": operation_data[4],
+            "group_id": operation_data[5],
+            "subgroup_id": operation_data[6],
+            "comment": operation_data[7],
+            "lesson_type_id": operation_data[8] if len(operation_data) > 8 else None
+        }
         try:
-            cursor.execute('''
-                INSERT INTO financial_operations 
-                (operation_date, operation_type_id, amount, category_id, subcategory_id, group_id, subgroup_id, comment)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', operation_data)
-
-            conn.commit()
+            with self.engine.begin() as conn:
+                conn.execute(insert_sql, params)
             return True
         except Exception as e:
             st.error(f"Ошибка при добавлении операции: {e}")
             return False
-        finally:
-            conn.close()
 
     def get_operations(self, start_date=None, end_date=None):
         """Получает операции за период с правильными JOIN по вашей схеме"""
