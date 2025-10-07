@@ -6,6 +6,12 @@ from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
 
+engine = create_engine(
+    st.secrets["DB_URL"],
+    connect_args={"sslmode": "require"},
+    pool_pre_ping=True
+)
+
 # with sqlite3.connect('millimon_finsnce.db') as db:
 #     cur = db.cursor()
 #     cur.execute("PRAGMA foreign_keys = ON")
