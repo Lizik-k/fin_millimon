@@ -6,11 +6,19 @@ from datetime import datetime, timedelta
 import calendar
 import plotly.express as px
 
-engine = create_engine(
-    st.secrets["DB_URL"],
-    connect_args={"sslmode": "require"},
-    pool_pre_ping=True
-)
+st.title("🔗 Проверка подключения к Supabase")
+
+try:
+    engine = create_engine(
+        st.secrets["DB_URL"],
+        connect_args={"sslmode": "require"},
+        pool_pre_ping=True
+    )
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT NOW()")).fetchone()
+        st.success(f"✅ Подключение успешно! Текущее время: {res[0]}")
+except Exception as e:
+    st.error(f"❌ Ошибка подключения: {e}")
 
 # with sqlite3.connect('millimon_finsnce.db') as db:
 #     cur = db.cursor()
